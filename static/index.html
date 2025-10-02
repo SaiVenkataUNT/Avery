@@ -1,1 +1,92 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Avery Chat</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 12px; }
+    #chatbox { width: 100%; max-width: 720px; height: 500px; border: 1px solid #ddd; padding: 12px; overflow-y: auto; background: #fafafa; }
+    .msg { margin-bottom: 10px; }
+    .user { color: #0b5fff; }
+    .bot { color: #0b9a3e; }
+    #controls { margin-top: 8px; display:flex; gap:8px; }
+    input[type=text] { flex: 1; padding: 8px; }
+    #email { width: 260px; }
+    button { padding: 8px 12px; }
+  </style>
+</head>
+<body>
+  <h2>Avery Chat</h2>
 
+  <div>
+    <label>Email (optional for personalized answers):</label>
+    <input id="email" type="text" placeholder="user@example.com" />
+  </div>
+
+  <div id="chatbox"></div>
+
+  <div id="controls">
+    <input id="input" type="text" placeholder="Ask Avery something..." />
+    <button id="send">Send</button>
+  </div>
+
+  <script>
+    const chatbox = document.getElementById('chatbox');
+    const inputEl = document.getElementById('input');
+    const emailEl = document.getElementById('email');
+    const sendBtn = document.getElementById('send');
+
+    let sessionId = localStorage.getItem('avery_session_id') || null;
+
+    function append(role, text) {
+      const d = document.createElement('div');
+      d.className = 'msg ' + (role === 'user' ? 'user' : 'bot');
+      d.innerHTML = `<strong>${role === 'user' ? 'You' : 'Avery'}:</strong> ${text}`;
+      chatbox.appendChild(d);
+      chatbox.scrollTop = chatbox.scrollHeight;
+    }
+
+    async function send() {
+      const msg = inputEl.value.trim();
+      if (!msg) return;
+      append('user', msg);
+      inputEl.value = '';
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Thinking...';
+
+      const body = { message: msg };
+      if (emailEl.value.trim()) body.email = emailEl.value.trim();
+      if (sessionId) body.session_id = sessionId;
+
+      try {
+        const res = await fetch('/chat', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(body)
+        });
+
+        if (!res.ok) {
+          const txt = await res.text();
+          append('bot', 'Error: ' + txt);
+          return;
+        }
+
+        const data = await res.json();
+        if (data.session_id) {
+          sessionId = data.session_id;
+          localStorage.setItem('avery_session_id', sessionId);
+        }
+        append('bot', data.reply || '(no reply)');
+      } catch (err) {
+        append('bot', 'Network or server error: ' + err.message);
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Send';
+      }
+    }
+
+    sendBtn.addEventListener('click', send);
+    inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+  </script>
+</body>
+</html>
